@@ -1,0 +1,7 @@
+claude-agent-sdk
+fastapi
+uvicorn[standard]
+faker
+python-dotenv
+rich
+pdfplumber

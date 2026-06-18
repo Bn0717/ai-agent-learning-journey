@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: scholarship_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scholarship_user
+      POSTGRES_PASSWORD: scholarship_pass
+      POSTGRES_DB: scholarship_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scholarship_user -d scholarship_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (optional caching) ───────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: scholarship_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # ── Scholarship Agent API ──────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: scholarship_agent
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://scholarship_user:scholarship_pass@db:5432/scholarship_db
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: >
+      sh -c "
+        python scripts/seed_db.py &&
+        uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+volumes:
+  postgres_data:
+  redis_data:

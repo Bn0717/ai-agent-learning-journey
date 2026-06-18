@@ -1,0 +1,7 @@
+.env
+.env.local
+scholarship.db
+__pycache__
+*.pyc
+*.pyo
+.git

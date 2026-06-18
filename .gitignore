@@ -1,0 +1,49 @@
+# Environment variables — never commit real credentials
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python virtual environments
+venv/
+.venv/
+env/
+rag-env/
+*-env/
+*.env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pycache
+
+# Distribution / build
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# HuggingFace model cache (large binary files)
+.cache/
+models/
+
+# Vector store binaries
+*.faiss
+*.pkl
+*.index

@@ -1,0 +1,6 @@
+anthropic[vertex]
+google-genai
+fastapi
+uvicorn[standard]
+python-dotenv
+markdown

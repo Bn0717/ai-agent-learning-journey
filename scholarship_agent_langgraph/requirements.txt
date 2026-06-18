@@ -1,0 +1,9 @@
+langgraph
+anthropic[vertex]
+faiss-cpu
+sentence-transformers
+pypdf
+fastapi
+uvicorn[standard]
+numpy
+google-auth

@@ -1,0 +1,41 @@
+[
+  {
+    "id": "S001",
+    "name": "Alice Chen",
+    "email": "alice.chen@university.edu",
+    "gpa": 3.8,
+    "field_of_study": "Computer Science",
+    "year": "Junior",
+    "nationality": "Malaysian",
+    "interests": ["Artificial Intelligence", "Machine Learning", "Data Science"],
+    "extracurriculars": ["Research Assistant (AI Lab)", "Coding Club President", "Hackathon winner"],
+    "financial_need": false,
+    "first_generation": false
+  },
+  {
+    "id": "S002",
+    "name": "Brian Okafor",
+    "email": "brian.okafor@college.edu",
+    "gpa": 3.1,
+    "field_of_study": "Environmental Science",
+    "year": "Sophomore",
+    "nationality": "Nigerian",
+    "interests": ["Climate Change", "Sustainability", "Renewable Energy"],
+    "extracurriculars": ["Environmental Club", "Community Garden Project"],
+    "financial_need": true,
+    "first_generation": true
+  },
+  {
+    "id": "S003",
+    "name": "Siti Rahimah",
+    "email": "siti.rahimah@utm.edu.my",
+    "gpa": 3.6,
+    "field_of_study": "Cybersecurity",
+    "year": "Senior",
+    "nationality": "Malaysian",
+    "interests": ["Network Security", "Digital Forensics", "Ethical Hacking"],
+    "extracurriculars": ["CTF Team Captain", "IEEE Student Member", "Internship at MCMC"],
+    "financial_need": false,
+    "first_generation": false
+  }
+]

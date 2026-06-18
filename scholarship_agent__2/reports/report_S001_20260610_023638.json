@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-06-10T02:36:38.347976",
+  "student_id": "S001",
+  "student_name": "Alice Chen",
+  "ranked_scholarships": [
+    {
+      "rank": 1,
+      "name": "Cybersecurity Research Fellowship",
+      "amount_usd": 20000,
+      "deadline": "2026-09-15",
+      "provider": "CyberSafe Institute",
+      "justification": "Alice's CS background and 3.8 GPA position her well; cybersecurity increasingly intersects with AI/ML in threat detection and security analytics."
+    },
+    {
+      "rank": 2,
+      "name": "AI & Machine Learning Future Leaders Award",
+      "amount_usd": 15000,
+      "deadline": "2026-10-31",
+      "provider": "Tech Innovation Fund",
+      "justification": "Perfect alignment with Alice's core interests in AI and Machine Learning; 3.8 GPA demonstrates academic excellence for future leadership."
+    },
+    {
+      "rank": 3,
+      "name": "Women in Technology Scholarship",
+      "amount_usd": 10000,
+      "deadline": "2026-09-30",
+      "provider": "Digital Futures Foundation",
+      "justification": "Excellent fit as a woman in Computer Science with strong academics (3.8 GPA), supporting her AI/ML tech career goals."
+    },
+    {
+      "rank": 4,
+      "name": "Southeast Asia STEM Scholarship",
+      "amount_usd": 8000,
+      "deadline": "2026-11-30",
+      "provider": "ASEAN Education Council",
+      "justification": "Strong regional match for Malaysian student; CS degree and 3.8 GPA align with ASEAN STEM excellence criteria."
+    },
+    {
+      "rank": 5,
+      "name": "STEM Excellence Scholarship",
+      "amount_usd": 12000,
+      "deadline": "2026-12-15",
+      "provider": "National Science Foundation",
+      "justification": "3.8 GPA and CS major demonstrate STEM excellence; AI, ML, Data Science focus strengthens application foundation."
+    },
+    {
+      "rank": 6,
+      "name": "Malaysia Tech Talent Scholarship",
+      "amount_usd": 7000,
+      "deadline": "2026-10-01",
+      "provider": "Malaysia Digital Economy Corporation (MDEC)",
+      "justification": "Direct nationality match; CS degree and AI/ML interests align with Malaysia's digital economy development priorities."
+    },
+    {
+      "rank": 7,
+      "name": "Data Science & Analytics Scholarship",
+      "amount_usd": 8500,
+      "deadline": "2026-11-01",
+      "provider": "Analytics Professionals Network",
+      "justification": "Directly matches stated Data Science interest; CS background and 3.8 GPA support analytical and technical proficiency."
+    },
+    {
+      "rank": 8,
+      "name": "Healthcare Innovation Scholarship",
+      "amount_usd": 11000,
+      "deadline": "2026-10-15",
+      "provider": "MedTech Alliance",
+      "justification": "Possible if Alice connects AI/ML to healthcare tech, medical data analysis, or clinical decision support applications."
+    },
+    {
+      "rank": 9,
+      "name": "Sunway Education Excellence Scholarship",
+      "amount_usd": 6000,
+      "deadline": "2026-08-31",
+      "provider": "Sunway Group",
+      "justification": "3.8 GPA qualifies for general academic excellence; Malaysian connection, though no specific field alignment."
+    },
+    {
+      "rank": 10,
+      "name": "Global Business Leadership Scholarship",
+      "amount_usd": 9500,
+      "deadline": "2026-11-15",
+      "provider": "International Commerce Institute",
+      "justification": "Weakest fit\u2014business leadership focus doesn't align with CS field or technical AI/ML/Data Science interests."
+    }
+  ]
+}

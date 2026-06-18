@@ -1,0 +1,13 @@
+langchain
+langchain-community
+langchain-google-vertexai
+langchain-huggingface
+faiss-cpu
+sentence-transformers
+pypdf
+fastapi
+uvicorn[standard]
+google-cloud-aiplatform
+google-auth
+langchain-text-splitters
+

@@ -1,0 +1,5 @@
+google-genai
+python-dotenv
+markdown
+fastapi
+uvicorn[standard]

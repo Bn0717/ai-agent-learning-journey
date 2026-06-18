@@ -1,0 +1,29 @@
+# Core
+claude-agent-sdk>=0.1.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
+
+# HTTP
+httpx>=0.27.0
+
+# Email
+sendgrid>=6.11.0  # optional — comment out if using SMTP only
+
+# Async
+anyio>=4.4.0
+
+# Redis (optional caching)
+redis>=5.0.0
+
+# Dev / testing
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0  # test client
+python-dotenv>=1.0.0
