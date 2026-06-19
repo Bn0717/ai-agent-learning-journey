@@ -1,12 +1,9 @@
-langchain
-langchain-huggingface
+langgraph
 anthropic[vertex]
 faiss-cpu
 sentence-transformers
 pypdf
 fastapi
 uvicorn[standard]
-google-cloud-aiplatform
+numpy
 google-auth
-langchain-text-splitters
-

@@ -33,6 +33,9 @@ node_modules/
 .DS_Store
 Thumbs.db
 
+# Claude Code internal settings
+.claude/
+
 # Logs
 *.log
 
@@ -47,3 +50,8 @@ models/
 *.faiss
 *.pkl
 *.index
+
+
+
+langchain_course/
+langgraph_course/
