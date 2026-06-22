@@ -1,11 +1,19 @@
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download embedding model so container starts instantly on Cloud Run
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
 COPY . .
 
-CMD uvicorn rag:app --host 0.0.0.0 --port ${PORT:-8080}
+ENV PORT=8080
+EXPOSE 8080
+
+CMD ["sh", "-c", "uvicorn rag:app --host 0.0.0.0 --port ${PORT}"]

@@ -1,12 +1,12 @@
-"""
-run
-.\rag-env\Scripts\Activate.ps1
+r"""
+Setup (first time only):
+  1. C:\Users\Bryan Ngu\Sunway Internship\langgraph\Scripts\Activate.ps1
+  2. pip install python-dotenv
 
-then
-$env:GOOGLE_CLOUD_PROJECT = "brain-433706"
-$env:GOOGLE_CLOUD_LOCATION = "asia-southeast1"
-$env:VERTEX_MODEL = "claude-sonnet-4-6"
-python rag.py
+Run locally:
+  1. C:\Users\Bryan Ngu\Sunway Internship\langgraph\Scripts\Activate.ps1
+  2. cd scholarship_agent_langgraph_agent
+  3. python rag.py
 
 
 Scholarship RAG (Agent Loop) — FastAPI web service for Cloud Run.
@@ -30,7 +30,7 @@ Uses LangGraph + Vertex AI (Claude Sonnet 4.6) with a dynamic LLM planner.
 """
 
 import json
-import os 
+import os
 import re
 from contextlib import asynccontextmanager
 from typing import List
@@ -38,11 +38,14 @@ from typing import List
 import faiss
 import numpy as np
 from anthropic import AnthropicVertex
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from typing_extensions import TypedDict
+
+load_dotenv()
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 DOCS_DIR      = "docs"
@@ -53,8 +56,11 @@ EMBED_MODEL   = "all-MiniLM-L6-v2"
 MAX_LOOPS     = 3
 
 LLM_MODEL   = os.environ.get("VERTEX_MODEL", "claude-sonnet-4-6")
-GCP_PROJECT = os.environ["GOOGLE_CLOUD_PROJECT"]
+GCP_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 GCP_REGION  = os.environ.get("GOOGLE_CLOUD_LOCATION", "asia-southeast1")
+
+if not GCP_PROJECT:
+    raise RuntimeError("GOOGLE_CLOUD_PROJECT is not set. Check your .env file.")
 
 _embed_model: SentenceTransformer = None
 _index: faiss.IndexFlatIP = None

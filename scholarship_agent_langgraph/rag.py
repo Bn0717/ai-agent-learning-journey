@@ -1,4 +1,13 @@
-"""
+r"""
+Setup (first time only):
+  1. C:\Users\Bryan Ngu\Sunway Internship\langgraph\Scripts\Activate.ps1
+  2. pip install python-dotenv
+
+Run locally:
+  1. C:\Users\Bryan Ngu\Sunway Internship\langgraph\Scripts\Activate.ps1
+  2. cd scholarship_agent_langgraph
+  3. python rag.py
+
 Scholarship RAG (LangGraph) — FastAPI web service for Cloud Run.
 Uses LangGraph + Vertex AI (Claude Sonnet 4.6) for a stateful, self-correcting RAG workflow.
 
@@ -22,6 +31,8 @@ import faiss
 from pathlib import Path
 from typing import List, Tuple, TypedDict
 from contextlib import asynccontextmanager
+import uvicorn
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -30,6 +41,7 @@ from pypdf import PdfReader
 from anthropic import AnthropicVertex
 from langgraph.graph import StateGraph, END
 
+load_dotenv()
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 DOCS_DIR      = Path("docs")
@@ -254,3 +266,37 @@ def ask(req: AskRequest):
         "answer_verified": False,
     })
     return AskResponse(answer=result["answer"])
+
+
+
+
+if __name__ == "__main__":
+    if not DOCS_DIR.exists():
+        raise RuntimeError(f"'{DOCS_DIR}' directory not found.")
+    docs = load_documents(DOCS_DIR)
+    if not docs:
+        raise RuntimeError(f"No .txt or .pdf files found in '{DOCS_DIR}'.")
+    print(f"Loaded {len(docs)} document(s): {[d[0] for d in docs]}")
+    print("Loading embedding model …")
+    _embed_model = SentenceTransformer(EMBED_MODEL)
+    _index, _chunks = build_index(docs, _embed_model)
+
+    chain = build_graph()
+
+    while True:
+        q = input("Question: ")
+        if q.lower() in ["exit", "quit"]:
+            break
+
+        result = chain.invoke({
+            "question": q,
+            "rewritten_question": "",
+            "context": [],
+            "answer": "",
+            "retrieve_count": 0,
+            "verify_count": 0,
+            "context_sufficient": False,
+            "answer_verified": False,
+        })
+
+        print(result["answer"])
