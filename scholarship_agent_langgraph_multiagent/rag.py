@@ -19,26 +19,30 @@ Uses LangGraph + Vertex AI (Claude Sonnet 4.6) with a 3-agent system.
     → FAISS IndexFlatIP + L2 normalize         cosine similarity index
 
 ── Graph flow (Phase 6) ─────────────────────────────────────────────────────────
-  Research Agent   rewrites question → calls retrieve_tool + memory_tool via tool_executor
+  Research Agent   rewrites question → ONE tool_executor("research") call
       ↓
   Writer Agent     generates answer from context (+ critique on retry)
       ↓
-  Critic Agent     evaluates grounding + correctness; returns explicit JSON verdict
-      ├─ passed=true                 → END  (stores to long-term memory)
-      ├─ passed=false, next=writer   → Writer retry  (max 1)
-      └─ passed=false, next=research → Research retry (max 1) → Writer → Critic
+  Critic Agent     evaluates grounding; returns {passed, critique} only
+      ├─ passed=true         → END  (stores to long-term memory)
+      ├─ writer_count < 2    → Writer retry
+      ├─ research_count < 2  → Research retry → Writer → Critic
+      └─ else                → END
   END
 
 ── Tool layer (Phase 7) ─────────────────────────────────────────────────────────
-  retrieve_tool(query)      FAISS top-k cosine-similarity search
-  search_tool(query)        stub delegating to retrieve_tool
-  memory_tool(question)     semantic long-term memory lookup
-  tool_executor(name, q)    single entry point — agents call only this, never tools directly
+  retrieve_tool(query)    FAISS top-k cosine-similarity search
+  search_tool(query)      stub delegating to retrieve_tool
+  memory_tool(query)      FAISS memory index semantic lookup
+  research_tool(query)    combined: retrieve + memory (single agent entry point)
+  tool_executor(name, q)  single entry point — agents call only this
 
 ── Memory layer (Phase 8) ───────────────────────────────────────────────────────
   short_term_memory   context + critique in LangGraph state (per request)
-  long_term_memory    embedding-based store; retrieves by cosine similarity (threshold=0.75)
-                      supports rephrased/paraphrased questions — no exact match required
+  long_term_memory    FAISS IndexFlatIP memory index + parallel answer list
+                      O(n) exact cosine search — consistent with main index
+                      supports rephrased/paraphrased questions (threshold=0.75)
+                      grows dynamically: one entry added per PASS verdict
 """
 
 import json
@@ -66,7 +70,7 @@ CHUNK_SIZE       = 500
 CHUNK_OVERLAP    = 50
 TOP_K            = 5
 EMBED_MODEL      = "all-MiniLM-L6-v2"
-MEMORY_THRESHOLD = 0.75   # cosine similarity threshold for long-term memory recall
+MEMORY_THRESHOLD = 0.75
 
 LLM_MODEL   = os.environ.get("VERTEX_MODEL", "claude-sonnet-4-6")
 GCP_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
@@ -76,37 +80,39 @@ if not GCP_PROJECT:
     raise RuntimeError("GOOGLE_CLOUD_PROJECT is not set.")
 
 _embed_model: Optional[SentenceTransformer] = None
-_index: Optional[faiss.IndexFlatIP] = None
-_chunks: List[str] = []
-_graph = None
+_index:       Optional[faiss.IndexFlatIP]   = None   # main doc index
+_chunks:      List[str]                     = []
+_graph                                      = None
 
-# ── Memory Layer (Phase 8) ─────────────────────────────────────────────────────
-# Embedding-based long-term memory — handles rephrased/paraphrased questions.
-# Each record stores the original question, answer, and its normalized embedding.
-_memory_store: List[dict] = []   # [{"question": str, "answer": str, "vec": np.ndarray}]
+# ── Memory Layer (Phase 8) — FAISS-based ──────────────────────────────────────
+# Uses a dedicated FAISS index for semantic retrieval — same infrastructure as
+# the doc index. _mem_answers is a parallel array: index i → stored answer i.
+_mem_index:   Optional[faiss.IndexFlatIP] = None
+_mem_answers: List[str]                   = []
 
 
 def memory_store(question: str, answer: str) -> None:
+    global _mem_index
     vec = _embed_model.encode([question.strip()], convert_to_numpy=True).astype("float32")
     faiss.normalize_L2(vec)
-    _memory_store.append({"question": question.strip(), "answer": answer, "vec": vec[0]})
+    if _mem_index is None:
+        _mem_index = faiss.IndexFlatIP(vec.shape[1])
+    _mem_index.add(vec)
+    _mem_answers.append(answer)
     print(f"[memory] stored: {question.strip()[:60]}")
 
 
 def memory_retrieve(question: str) -> Optional[str]:
-    """Returns best matching past answer if cosine similarity ≥ MEMORY_THRESHOLD."""
-    if not _memory_store:
+    """FAISS nearest-neighbour search over stored question embeddings."""
+    if _mem_index is None or _mem_index.ntotal == 0:
         return None
     q_vec = _embed_model.encode([question.strip()], convert_to_numpy=True).astype("float32")
     faiss.normalize_L2(q_vec)
-    best_score, best_answer = -1.0, None
-    for record in _memory_store:
-        score = float(np.dot(q_vec[0], record["vec"]))
-        if score > best_score:
-            best_score, best_answer = score, record["answer"]
-    if best_score >= MEMORY_THRESHOLD:
-        print(f"[memory] hit (score={best_score:.3f}): {question.strip()[:60]}")
-        return best_answer
+    scores, indices = _mem_index.search(q_vec, 1)
+    score = float(scores[0][0])
+    if score >= MEMORY_THRESHOLD:
+        print(f"[memory] hit (score={score:.3f}): {question.strip()[:60]}")
+        return _mem_answers[int(indices[0][0])]
     return None
 
 
@@ -123,10 +129,10 @@ def llm(prompt: str) -> str:
 
 # ── Tool Layer (Phase 7) ───────────────────────────────────────────────────────
 def retrieve_tool(query: str) -> List[str]:
-    """FAISS cosine-similarity search."""
-    query_vec = _embed_model.encode([query], convert_to_numpy=True).astype("float32")
-    faiss.normalize_L2(query_vec)
-    _, indices = _index.search(query_vec, TOP_K)
+    """FAISS cosine-similarity search over doc index."""
+    q_vec = _embed_model.encode([query], convert_to_numpy=True).astype("float32")
+    faiss.normalize_L2(q_vec)
+    _, indices = _index.search(q_vec, TOP_K)
     results = [_chunks[i] for i in indices[0] if i < len(_chunks)]
     print(f"[retrieve_tool] {len(results)} chunks for: {query[:60]}")
     return results
@@ -137,16 +143,22 @@ def search_tool(query: str) -> List[str]:
     return retrieve_tool(query)
 
 
-def memory_tool(question: str) -> List[str]:
-    """Long-term memory lookup via semantic similarity."""
-    result = memory_retrieve(question)
+def memory_tool(query: str) -> List[str]:
+    """FAISS memory index lookup — returns past answer wrapped as context chunk."""
+    result = memory_retrieve(query)
     return [f"[Long-term Memory]\n{result}"] if result else []
+
+
+def research_tool(query: str) -> List[str]:
+    """Combined entry point: FAISS doc retrieval + memory lookup in one call."""
+    return retrieve_tool(query) + memory_tool(query)
 
 
 TOOLS: Dict[str, Callable[[str], List[str]]] = {
     "retrieve": retrieve_tool,
     "search":   search_tool,
     "memory":   memory_tool,
+    "research": research_tool,
 }
 
 
@@ -157,22 +169,22 @@ def tool_executor(tool_name: str, query: str) -> List[str]:
     return TOOLS[tool_name](query)
 
 
-# ── Graph State (Phase 6) ──────────────────────────────────────────────────────
+# ── Graph State ────────────────────────────────────────────────────────────────
+# next_action removed — routing is derived in route_after_critic(), not stored.
 class MultiAgentState(TypedDict):
-    question: str
-    rewritten_question: str   # short_term_memory: rewritten query used for retrieval
-    context: List[str]        # short_term_memory: retrieved chunks for this request
-    answer: str
-    critique: str             # short_term_memory: critic feedback for Writer retry
-    passed: bool              # explicit PASS signal from Critic (not inferred from string)
-    next_action: str          # critic-controlled routing: "writer" | "research" | "end"
-    writer_count: int         # Writer runs at most twice (max 1 retry)
-    research_count: int       # Research can be re-triggered at most once
+    question:           str
+    rewritten_question: str       # rewritten query used for retrieval
+    context:            List[str] # short_term_memory: retrieved chunks
+    answer:             str
+    critique:           str       # short_term_memory: critic feedback for Writer retry
+    passed:             bool      # explicit Critic verdict (not inferred from strings)
+    writer_count:       int       # Writer runs at most twice (max 1 retry)
+    research_count:     int       # Research can be re-triggered at most once
 
 
 # ── Agent Nodes ────────────────────────────────────────────────────────────────
 def node_research_agent(state: MultiAgentState) -> dict:
-    """Research Agent: determines query, calls tools only — no generation logic."""
+    """Research Agent: rewrites question, makes ONE tool call — no generation, no routing."""
     question = state["question"]
     critique = state.get("critique", "")
 
@@ -183,15 +195,15 @@ def node_research_agent(state: MultiAgentState) -> dict:
     )
     if critique:
         rewrite_prompt += (
-            f"\n\nNote: A previous search was insufficient. Critique: {critique}\n"
+            f"\n\nPrevious search was insufficient. Critique: {critique}\n"
             "Adjust the query to find more relevant information."
         )
 
     rewritten = llm(rewrite_prompt).strip() or question
     print(f"[research] rewritten: {rewritten[:80]}")
 
-    context = tool_executor("retrieve", rewritten)
-    context.extend(tool_executor("memory", question))
+    # Single tool call — research_tool combines retrieval + memory internally
+    context = tool_executor("research", rewritten)
 
     return {
         "context":            context,
@@ -201,7 +213,7 @@ def node_research_agent(state: MultiAgentState) -> dict:
 
 
 def node_writer_agent(state: MultiAgentState) -> dict:
-    """Writer Agent: generates answer from context only — no retrieval, no evaluation."""
+    """Writer Agent: generates answer from context only — no tools, no routing."""
     context_text = "\n\n---\n\n".join(state["context"]) if state["context"] else "No context available."
     critique = state.get("critique", "")
 
@@ -222,7 +234,7 @@ def node_writer_agent(state: MultiAgentState) -> dict:
 
 
 def node_critic_agent(state: MultiAgentState) -> dict:
-    """Critic Agent: returns explicit structured verdict — no string inference for PASS/FAIL."""
+    """Critic Agent: evaluates answer, returns {passed, critique} only — routing is Python's job."""
     context_text = "\n\n---\n\n".join(state["context"])
     result = llm(
         "Evaluate the answer strictly against the context below.\n"
@@ -231,44 +243,37 @@ def node_critic_agent(state: MultiAgentState) -> dict:
         f"Question: {state['question']}\n"
         f"Answer: {state['answer']}\n\n"
         "Reply with ONLY valid JSON (no extra text):\n"
-        '{"passed": true/false, "next_action": "end"|"writer"|"research", "critique": "one sentence"}\n\n'
-        "Rules:\n"
-        "  passed=true  → next_action must be 'end'\n"
-        "  passed=false + answer is wrong or incomplete → next_action='writer'\n"
-        "  passed=false + context is insufficient to answer → next_action='research'"
+        '{"passed": true/false, "critique": "one sentence explaining the verdict"}'
     )
 
-    passed, next_action, critique = False, "writer", result.strip()
+    passed, critique = False, result.strip()
     try:
         match = re.search(r'\{.*?\}', result, re.DOTALL)
         if match:
-            data       = json.loads(match.group())
-            passed     = bool(data.get("passed", False))
-            next_action = data.get("next_action", "writer")
-            critique   = data.get("critique", result.strip())
+            data     = json.loads(match.group())
+            passed   = bool(data.get("passed", False))
+            critique = data.get("critique", result.strip())
     except (json.JSONDecodeError, AttributeError):
         passed = result.strip().upper().startswith("PASS")
 
     if passed:
-        next_action = "end"
         memory_store(state["question"], state["answer"])
         print("[critic] PASS — stored to long-term memory")
     else:
-        print(f"[critic] FAIL — next_action={next_action}")
+        print(f"[critic] FAIL — {critique[:80]}")
 
-    return {"passed": passed, "critique": critique, "next_action": next_action}
+    return {"passed": passed, "critique": critique}
 
 
-# ── Routing ────────────────────────────────────────────────────────────────────
+# ── Routing (single source of truth) ──────────────────────────────────────────
 def route_after_critic(state: MultiAgentState) -> str:
     if state["passed"]:
         return "end"
-    next_action = state.get("next_action", "writer")
-    if next_action == "research" and state["research_count"] < 2:
-        return "research"
-    if next_action == "writer" and state["writer_count"] < 2:
-        return "writer"
-    return "end"
+    if state["writer_count"] < 2:
+        return "writer"       # improve the answer first
+    if state["research_count"] < 2:
+        return "research"     # writer exhausted — retry with fresh context
+    return "end"              # both retries exhausted
 
 
 # ── Graph Builder ──────────────────────────────────────────────────────────────
@@ -362,7 +367,6 @@ def ask(req: AskRequest):
         "answer":             "",
         "critique":           "",
         "passed":             False,
-        "next_action":        "",
         "writer_count":       0,
         "research_count":     0,
     })
@@ -389,7 +393,6 @@ if __name__ == "__main__":
             "answer":             "",
             "critique":           "",
             "passed":             False,
-            "next_action":        "",
             "writer_count":       0,
             "research_count":     0,
         })
