@@ -12,17 +12,52 @@ Scholarship RAG (LangGraph) — FastAPI web service for Cloud Run.
 Uses LangGraph + Vertex AI (Claude Sonnet 4.6) for a stateful, self-correcting RAG workflow.
 
 ── Graph flow ───────────────────────────────────────────────────────────────────
-  query_rewrite     rewrite vague question for better retrieval
-      ↓
-  retrieve          FAISS top-k search on rewritten question
-      ↓
-  evaluate_context  Claude checks if context is sufficient
-      ↓ sufficient (or retrieve_count ≥ 2)    ↓ insufficient → retrieve (max 1 retry)
-  generate          Claude answers using retrieved context
-      ↓
-  verify            Claude checks answer is grounded in context
-      ↓ verified (or verify_count ≥ 2)         ↓ unsupported → generate (max 1 retry)
-  END
+  (D) deterministic — edge is always taken
+  (C) conditional   — routing function decides at runtime
+
+            ┌────────────────────┐
+            │     USER INPUT     │
+            └─────────┬──────────┘
+                      │ (D)
+                      v
+        ┌──────────────────────────┐
+        │      QUERY REWRITE       │
+        │  - LLM rewrites question │
+        │    for better retrieval  │
+        └─────────┬────────────────┘
+                  │ (D)
+                  v
+        ┌──────────────────────────┐ ◄──────────────────────────┐
+        │         RETRIEVE         │                             │
+        │  - embed rewritten query │                             │
+        │  - FAISS top-5 search    │                             │ (C) insufficient
+        └─────────┬────────────────┘                             │ ← route_after_evaluate()
+                  │ (D)                                          │   rc < 2 (max 1 retry)
+                  v                                              │
+        ┌──────────────────────────┐                             │
+        │     EVALUATE CONTEXT     │─────────────────────────────┘
+        │  - Claude checks if      │
+        │    context is sufficient │
+        └─────────┬────────────────┘
+                  │ (C) sufficient or rc ≥ 2
+                  │ ← route_after_evaluate()
+                  v
+        ┌──────────────────────────┐ ◄──────────────────────────┐
+        │         GENERATE         │                             │
+        │  - Claude answers        │                             │ (C) unsupported
+        │    from context          │                             │ ← route_after_verify()
+        └─────────┬────────────────┘                             │   vc < 2 (max 1 retry)
+                  │ (D)                                          │
+                  v                                              │
+        ┌──────────────────────────┐                             │
+        │          VERIFY          │─────────────────────────────┘
+        │  - Claude checks answer  │
+        │    is grounded in ctx    │
+        └─────────┬────────────────┘
+                  │ (C) verified or vc ≥ 2
+                  │ ← route_after_verify()
+                  v
+                 END
 """
 
 import os
@@ -266,8 +301,6 @@ def ask(req: AskRequest):
         "answer_verified": False,
     })
     return AskResponse(answer=result["answer"])
-
-
 
 
 if __name__ == "__main__":

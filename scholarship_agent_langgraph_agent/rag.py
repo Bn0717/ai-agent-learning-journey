@@ -19,14 +19,35 @@ Uses LangGraph + Vertex AI (Claude Sonnet 4.6) with a dynamic LLM planner.
     → SentenceTransformer (all-MiniLM-L6-v2)  embed each chunk
     → FAISS IndexFlatIP + L2 normalize         cosine similarity index
 
-── Per request (POST /ask) ─────────────────────────────────────────────────────
-  user question
-    → planner   Claude decides: retrieve | rewrite | generate | finish
-        ↓ retrieve   FAISS top-5 search               → back to planner
-        ↓ rewrite    Claude rewrites the question     → back to planner
-        ↓ generate   Claude answers with context      → back to planner
-        ↓ finish     return current answer as final
-    (max 3 planner loops to prevent infinite cycles)
+── Graph flow ───────────────────────────────────────────────────────────────────
+  (D) deterministic — edge is always taken
+  (C) conditional   — routing function decides at runtime
+
+            ┌────────────────────┐
+            │     USER INPUT     │
+            └─────────┬──────────┘
+                      │ (D)
+                      v
+        ┌─────────────────────────────────┐  (C) finish
+   ┌───►│           PLANNER               │──────────────► END
+   │    │  - checks state:                │  / max_loops
+   │    │    history, context, answer     │
+   │    │  - LLM picks next action        │
+   │    └──┬─────────────┬────────────────┘
+   │       │(C)          │(C)          (C)
+   │    rewrite       retrieve       generate
+   │       │             │               │
+   │       v             v               v
+   │ ┌──────────┐  ┌──────────────┐  ┌──────────────┐
+   │ │  REWRITE  │  │   RETRIEVE   │  │   GENERATE   │
+   │ │ - LLM     │  │ - embed      │  │ - LLM answer │
+   │ │  rewrites │  │   query      │  │   from ctx   │
+   │ │  question │  │ - FAISS top-5│  │              │
+   │ └─────┬─────┘  └──────┬───────┘  └──────┬───────┘
+   │       │ (D)           │ (D)             │ (D)
+   └───────┴───────────────┴─────────────────┘
+               (all loop back to PLANNER)
+               loop_count guard: max 3 iterations
 """
 
 import json

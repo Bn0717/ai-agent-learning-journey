@@ -1,0 +1,5 @@
+deepagents
+langchain-anthropic
+fastapi
+uvicorn[standard]
+python-dotenv
